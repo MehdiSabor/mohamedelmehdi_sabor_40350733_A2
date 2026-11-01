@@ -36,11 +36,11 @@ RUN chmod 600 /home/mpiuser/.ssh/authorized_keys
 RUN chmod 600 /home/mpiuser/.ssh/config
 USER root
 
-# Copy the project code into /app (the dataset is not copied, it is shared at run time)
+# Copy the project code into /app (the dataset is not copied, it is given to the master at run time)
 COPY . /app
 WORKDIR /app
 
-# Where the dataset will be inside every container
+# Where the dataset will be inside the master container (workers get their rows from the master)
 ENV PATH_DATASET=/data/Books_rating.csv
 
 # SSH port, so the containers can reach each other

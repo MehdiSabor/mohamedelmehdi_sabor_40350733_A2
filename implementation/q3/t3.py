@@ -18,17 +18,20 @@ class MPISolution:
         self.dataset_path = dataset_path
         self.dataset_size = dataset_size
 
-    def group_chunk(self, chunk):
-
-        start, end = chunk
+    def read_rows(self, start, end):
         if start == end:
-            return {}
-        
+            return pd.DataFrame()
+
         df = pd.read_csv(
                 self.dataset_path, skiprows=1 + start, nrows=end - start,
                 header=None, usecols=[3, 6, 0, 4], encoding="utf-8-sig",
                 dtype={0: str, 3: str},
             )
+        return df
+
+    def group_chunk(self, df):
+        if len(df) == 0:
+            return {}
 
         users = {}
         for user_id, score, book_id, u_name in zip(df[3], df[6], df[0],df[4]):
@@ -56,12 +59,15 @@ class MPISolution:
         workers = comm.Get_size()
 
         error_message = None
+        data = None
         if rank == 0:
             try:
                 if not isinstance(self.dataset_size, int) or self.dataset_size < 0:
                     raise ValueError("The dataset size must be a nonnegative integer.")
                 if not self.dataset_path or not os.path.exists(self.dataset_path):
                     raise FileNotFoundError("Dataset not found: " + str(self.dataset_path))
+                # Only the master reads the dataset, the workers get their rows from it
+                data = self.read_rows(0, self.dataset_size)
             except Exception as error:
                 error_message = str(error)
             for worker in range(1, workers):
@@ -91,7 +97,7 @@ class MPISolution:
                     chunk_size = chunk_size + 1
                 end = start + chunk_size
                 chunk_sizes.append(chunk_size)
-                chunks[worker] = (start, end)
+                chunks[worker] = data.iloc[start:end]
                 start = end
 
             chunk = chunks.get(0)
