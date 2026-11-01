@@ -1,0 +1,167 @@
+"""
+You are allowed use necessary python libraries.
+You are not allowed to have any global function or variables.
+"""
+import time
+from dotenv import load_dotenv
+import os
+load_dotenv()
+import pandas as pd
+from multiprocessing import Pool
+
+
+class MultiProcessingSolution:
+    """
+    You are allowed to implement as many helper methods and variables as you wish
+    """
+    def __init__(self, num_of_processes=None, dataset_path=None, dataset_size=None):
+        self.num_of_processes = num_of_processes
+        self.dataset_path = dataset_path
+        self.dataset_size = dataset_size
+
+    def group_chunk(self, chunk):
+
+        start, end = chunk
+        if start == end:
+            return {}
+        
+        df = pd.read_csv(
+                self.dataset_path, skiprows=1 + start, nrows=end - start,
+                header=None, usecols=[3, 6, 0, 4], encoding="utf-8-sig",
+                dtype={0: str, 3: str},
+            )
+
+        users = {}
+        for user_id, score, book_id, u_name in zip(df[3], df[6], df[0],df[4]):
+                if pd.isna(user_id) or pd.isna(score):
+                    continue
+                if user_id not in users:
+                    users[user_id] = [0.0, 0, set(),set()]
+                users[user_id][0] = users[user_id][0] + score
+                users[user_id][1] = users[user_id][1] + 1
+                users[user_id][2].add(book_id)
+                if pd.notna(u_name):
+                    users[user_id][3].add(u_name)
+
+        return users
+
+
+    def run(self)->tuple[int,list,list,float]:
+        """
+        Returns the tuple of final_answer, chunkSizePerProcess, answerPerProcess, totalTimeTaken
+        """
+        start_time = time.perf_counter()
+        workers = self.num_of_processes
+
+        try:
+            if not isinstance(workers, int):
+                raise ValueError("The number of threads must be an integer.")
+
+            if workers < 1:
+                raise ValueError("There must be at least one thread.")
+
+            if not isinstance(self.dataset_size, int) or self.dataset_size < 0:
+                raise ValueError("The dataset size must be a nonnegative integer.")
+            if not self.dataset_path or not os.path.exists(self.dataset_path):
+                raise FileNotFoundError("Dataset not found: " + str(self.dataset_path))
+
+        except Exception as error:
+            error_message = str(error)
+            end_time = time.perf_counter()
+            elapsed = end_time - start_time
+            return error_message, [0], [0], elapsed
+
+        
+        chunk_sizes = []
+        chunks=[]
+        processes = []
+
+        
+
+        number_of_rows = self.dataset_size
+        rows_per_thread = number_of_rows // workers
+        leftover_rows = number_of_rows % workers
+        start = 0
+
+        for index in range(workers):
+            chunk_size = rows_per_thread
+
+            # Give one extra row to each of the first few threads.
+            if index < leftover_rows:
+                chunk_size = chunk_size + 1
+
+            end = start + chunk_size
+            chunk_sizes.append(chunk_size)
+
+            chunk = (start, end)
+            chunks.append(chunk)
+
+            start = end
+
+       
+        try:
+            with Pool(processes=workers) as pool:
+                answers = pool.map(self.group_chunk, chunks)
+        except Exception as error:
+            return str(error), chunk_sizes, [], time.perf_counter() - start_time
+
+
+
+        merged = {}
+
+        for users in answers:
+            for user_id in users:
+                score_sum, count, unique_books, name = users[user_id]
+
+                if user_id not in merged:
+                    merged[user_id] = [0.0, 0, set(),set()]
+
+                merged[user_id][0] = merged[user_id][0] + score_sum
+                merged[user_id][1] = merged[user_id][1] + count
+                merged[user_id][2].update(unique_books)
+                merged[user_id][3].update(name)
+
+        
+        max_count = -1
+        winning_users = []
+
+        for user_id in merged:
+            score_sum, n, unique_books, names = merged[user_id]
+
+            if score_sum / n == 4:
+                book_count = len(unique_books)
+                user_info = {
+                   
+                    "names": names,
+                    
+                }
+
+                if book_count > max_count:
+                    max_count = book_count
+                    winning_users = [user_info]
+
+                elif book_count == max_count:
+                    winning_users.append(user_info)
+        
+                
+
+
+        
+
+        end_time = time.perf_counter()
+        elapsed = end_time - start_time
+
+        return winning_users, chunk_sizes, answers, elapsed
+
+
+
+
+if __name__ == '__main__':
+    DATA_PATH = os.getenv('PATH_DATASET')
+    solution = MultiProcessingSolution(num_of_processes=4, dataset_path=DATA_PATH, dataset_size=3000000)
+    final_answer,chunkSizePerProcess,answerPerProcess,totalTimeTaken = solution.run()
+
+    
+    for user in final_answer:
+        print(user)
+    print("Time taken:", totalTimeTaken)

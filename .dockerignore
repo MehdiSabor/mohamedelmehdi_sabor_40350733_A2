@@ -1,0 +1,6 @@
+Books_rating.csv
+.venv
+.env
+.DS_Store
+*.pdf
+__pycache__
