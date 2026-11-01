@@ -1,0 +1,39 @@
+TASK 2 - Run Q3 (t3.py) on 4 Docker containers: 1 master + 3 workers
+
+1. Build the image "mpi-node" from the Dockerfile
+docker build --tag mpi-node .
+
+2. Create the private network for the containers
+docker network create --subnet 172.28.0.0/16 mpinet
+
+3. Start the master (the only container with the dataset)
+docker run -d --name master --hostname master --network mpinet --ip 172.28.0.10 -v "$(pwd)/Books_rating.csv":/data/Books_rating.csv:ro mpi-node
+
+4. Start the 3 workers
+docker run -d --name worker1 --hostname worker1 --network mpinet --ip 172.28.0.11 mpi-node
+docker run -d --name worker2 --hostname worker2 --network mpinet --ip 172.28.0.12 mpi-node
+docker run -d --name worker3 --hostname worker3 --network mpinet --ip 172.28.0.13 mpi-node
+
+5. Check the 4 containers are running
+docker ps
+
+6. Show the IP address of each container
+docker network inspect mpinet
+
+7. Check MPI starts one process in each container
+docker exec -u mpiuser master mpirun -n 4 --hostfile /app/hostfile hostname
+
+8. In a second terminal: watch live CPU, memory and network use of each container while the job runs (Ctrl + C to stop)
+docker stats master worker1 worker2 worker3
+
+9. Run Any Question on the cluster: shows the final answer, rows per worker and time per container
+docker exec -u mpiuser master mpirun -n 4 --hostfile /app/hostfile python /app/implementation/q1/t3.py
+
+docker exec -u mpiuser master mpirun -n 4 --hostfile /app/hostfile python /app/implementation/q2/t3.py
+
+docker exec -u mpiuser master mpirun -n 4 --hostfile /app/hostfile python /app/implementation/q3/t3.py
+
+
+10. Remove the containers and the network when finished
+docker rm -f master worker1 worker2 worker3
+docker network rm mpinet
